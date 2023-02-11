@@ -1,0 +1,66 @@
+version: "3.2"
+services:
+  rabbitmq:
+    image: rabbitmq:3.9.27-management-alpine
+    container_name: 'cryptox-rabbitmq-v1'
+    ports:
+      - 5672:5672
+      - 15672:15672
+  redis:
+    image: "redis/redis-stack:6.2.4-v4"
+    container_name: 'cryptox-redis'
+    ports:
+      - "6379:6379"
+      - "8001:8001"
+    environment:
+      - "REDIS_ARGS=--appendonly yes"
+    volumes:
+      - ./data:/data
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+  websocket-connector:
+    container_name: 'cryptox-ws-connector'
+    build:
+      context: ./websocket-connector
+      dockerfile: Dockerfile
+    environment:
+      - app.websocket.url=api.hitbtc.com/api/3/ws/public
+      - app.rabbit.exchange=test.exchange
+      - app.rabbit.queue=test.queue
+      - app.rabbit.routing-key=test.key
+      - app.rabbit.username=guest
+      - app.rabbit.password=guest
+      - app.rabbit.hostname=rabbitmq
+      - app.rabbit.port-number=5672
+    depends_on:
+      - rabbitmq
+  rabbit-connector:
+    container_name: 'cryptox-rabbit-connector'
+    build:
+      context: ./rabbitmq-connector
+      dockerfile: Dockerfile
+    environment:
+      - quarkus.redis.hosts=redis://redis:6379
+      - app.rabbit.exchange=test.exchange
+      - app.rabbit.queue=test.queue
+      - app.rabbit.routing-key=test.key
+      - app.rabbit.username=guest
+      - app.rabbit.password=guest
+      - app.rabbit.hostname=rabbitmq
+      - app.rabbit.port-number=5672
+    depends_on:
+      - rabbitmq
+      - redis
+  web-api:
+    container_name: 'cryptox-web-api'
+    build:
+      context: ./web-api
+      dockerfile: Dockerfile
+    ports:
+      - 8080:8080
+    environment:
+      - redis://redis:6379
+    depends_on:
+      - redis
